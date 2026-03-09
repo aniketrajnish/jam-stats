@@ -56,6 +56,33 @@
     return message;
   }
 
+  function getContentType(response) {
+    return String(response.headers.get("content-type") || "").toLowerCase();
+  }
+
+  async function readJsonResponse(response) {
+    const contentType = getContentType(response);
+    const text = await response.text();
+
+    if (!contentType.includes("application/json")) {
+      if (!apiBase) {
+        throw new Error("missing api set jam-stats-api-base to your deployed api origin");
+      }
+
+      throw new Error(`api at ${apiBase} returned ${contentType || "non-json content"}`);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      if (!apiBase) {
+        throw new Error("api response was not valid json set jam-stats-api-base to your deployed api origin");
+      }
+
+      throw new Error(`api at ${apiBase} returned invalid json`);
+    }
+  }
+
   function escapeHtml(value) {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -321,7 +348,7 @@
 
     try {
       const response = await fetch(getEntriesApiUrl(input));
-      const payload = await response.json();
+      const payload = await readJsonResponse(response);
       if (!response.ok) {
         throw new Error(payload.error || "unable to load entries");
       }
