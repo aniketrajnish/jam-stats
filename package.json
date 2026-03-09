@@ -1,0 +1,7 @@
+{
+  "name": "jam-stats",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}
