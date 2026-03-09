@@ -271,10 +271,44 @@ function slugifyCriteriaName(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function hasOverallCriterion(results) {
+  return results.some((result) => {
+    const criteria = Array.isArray(result?.criteria) ? result.criteria : [];
+    return criteria.some((criterion) => String(criterion?.name || "").trim().toLowerCase() === "overall");
+  });
+}
+
+function shouldUseTopLevelOverallRank(results) {
+  const ranks = results
+    .map((result) => Number(result?.rank))
+    .filter((rank) => Number.isFinite(rank) && rank > 0);
+
+  if (!ranks.length) {
+    return false;
+  }
+
+  if (ranks.length === 1) {
+    return true;
+  }
+
+  return new Set(ranks).size > 1;
+}
+
 function buildResultCriteria(results) {
   const criteria = [];
   const seenNames = new Set();
   const seenKeys = new Set();
+
+  if (!hasOverallCriterion(results) && shouldUseTopLevelOverallRank(results)) {
+    seenNames.add("overall");
+    seenKeys.add("overallRank");
+    criteria.push({
+      name: "Overall",
+      key: "overallRank",
+      source: "top_level_rank",
+      title: "overall rank from the top-level rank field in itch.io results.json",
+    });
+  }
 
   for (const result of results) {
     const resultCriteria = Array.isArray(result?.criteria) ? result.criteria : [];
@@ -296,7 +330,12 @@ function buildResultCriteria(results) {
       }
 
       seenKeys.add(key);
-      criteria.push({ name, key });
+      criteria.push({
+        name,
+        key,
+        source: "criteria",
+        title: `rank for ${name} from the criteria entries in itch.io results.json`,
+      });
     }
   }
 
@@ -344,12 +383,17 @@ function findResultForEntry(resultsLookup, submissionUrl, rateId, gameTitle) {
   return null;
 }
 
-function getCriteriaRank(result, criterionName) {
+function getResultRank(result, criterion) {
   if (!result) {
     return null;
   }
 
-  const normalizedName = String(criterionName || "").trim().toLowerCase();
+  if (criterion?.source === "top_level_rank") {
+    const rank = Number(result?.rank);
+    return Number.isFinite(rank) ? rank : null;
+  }
+
+  const normalizedName = String(criterion?.name || "").trim().toLowerCase();
   if (!normalizedName) {
     return null;
   }
@@ -437,7 +481,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
       };
 
       resultCriteria.forEach((criterion) => {
-        row[criterion.key] = getCriteriaRank(matchedResult, criterion.name);
+        row[criterion.key] = getResultRank(matchedResult, criterion);
       });
 
       return row;
@@ -458,7 +502,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
       ratesGiven: "following itch-analytics the coolness value exposed by entries.json is used as the available votes-given signal",
       coolness: "coolness comes directly from entries.json",
       karma: "karma is computed client-side as log(1 + coolness) - (log(1 + rating_count) / log(5))",
-      criteriaRanks: "when available result rank columns come directly from the criteria entries in itch.io results.json, including overall when the jam exposes it as a criterion",
+      criteriaRanks: "result rank columns come from itch.io results.json, using criteria entries when available and falling back to the top-level overall rank only when the jam does not expose an Overall criterion and the top-level ranks look usable",
       resultsCoverage: "some jams only publish ranked results for a subset of entries, so blank result cells can mean itch.io does not expose a public rank for that submission",
     },
   };

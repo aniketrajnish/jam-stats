@@ -257,7 +257,8 @@
       ? state.meta.resultCriteria.map((criterion) => ({
           key: criterion.key,
           label: `${String(criterion.name || "").toLowerCase()} rank`,
-          title: `rank for ${criterion.name} from itch.io results.json following the same finished-jam results feed used by itch-analytics`,
+          title: String(criterion.title || "").trim()
+            || `rank for ${criterion.name} from itch.io results.json following the same finished-jam results feed used by itch-analytics`,
           kind: "rank",
           defaultSortDir: "desc",
         }))
