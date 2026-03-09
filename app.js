@@ -60,6 +60,16 @@
     return String(response.headers.get("content-type") || "").toLowerCase();
   }
 
+  function getJamLabel(payload) {
+    const slug = String(payload?.jamSlug || "").trim();
+    if (slug) {
+      return slug;
+    }
+
+    const jamId = String(payload?.jamId || "").trim();
+    return jamId ? `jam ${jamId}` : "the selected jam";
+  }
+
   async function readJsonResponse(response) {
     const contentType = getContentType(response);
     const text = await response.text();
@@ -358,7 +368,7 @@
       state.platformFilters.clear();
       elements.searchInput.disabled = !state.rows.length;
       render();
-      setStatus(`loaded ${formatInteger(state.rows.length)} entries from jam ${payload.jamId}`, "success");
+      setStatus(`loaded ${formatInteger(state.rows.length)} entries from ${getJamLabel(payload)}`, "success");
     } catch (error) {
       state.rows = [];
       state.meta = null;
