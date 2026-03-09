@@ -378,6 +378,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
   const results = Array.isArray(resultsPayload?.results) ? resultsPayload.results : [];
   const resultCriteria = buildResultCriteria(results);
   const resultsLookup = buildResultsLookup(results);
+  let matchedResultsCount = 0;
 
   const rows = jamGames.map((entry, index) => {
     const game = entry?.game || {};
@@ -409,6 +410,10 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
     const projectUrl = String(game?.url || "").trim();
     const karma = computeKarma(coolness, ratingCount);
     const matchedResult = findResultForEntry(resultsLookup, submissionUrl, rateId, gameTitle);
+
+    if (matchedResult) {
+      matchedResultsCount += 1;
+    }
 
     const row = {
       submissionId: Number(entry?.id) || null,
@@ -451,6 +456,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
     jamSlug: inferredSlug,
     feedUrl,
     hasResults: results.length > 0,
+    matchedResultsCount,
     resultCriteria,
     generatedOn: Number(entriesPayload?.generated_on) || null,
     rows,
@@ -461,6 +467,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
       coolness: "coolness comes directly from entries.json",
       karma: "karma is computed client-side as log(1 + coolness) - (log(1 + rating_count) / log(5))",
       criteriaRanks: "when available result rank columns come directly from the criteria entries in itch.io results.json, including overall when the jam exposes it as a criterion",
+      resultsCoverage: "some jams only publish ranked results for a subset of entries, so blank result cells can mean itch.io does not expose a public rank for that submission",
     },
   };
 }

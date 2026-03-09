@@ -1,4 +1,6 @@
 (function () {
+  const MIN_RESULTS_COVERAGE_RATIO = 0.8;
+
   const BASE_COLUMNS = [
     {
       key: "gameName",
@@ -117,6 +119,49 @@
     return jamId ? `jam ${jamId}` : "the selected jam";
   }
 
+  function getResultsCoverageInfo(payload) {
+    const totalEntries = Array.isArray(payload?.rows) ? payload.rows.length : 0;
+    const matchedResultsCount = Number(payload?.matchedResultsCount);
+    const normalizedMatchedResultsCount = Number.isFinite(matchedResultsCount) && matchedResultsCount > 0
+      ? matchedResultsCount
+      : 0;
+
+    return {
+      totalEntries,
+      matchedResultsCount: normalizedMatchedResultsCount,
+      coverageRatio: totalEntries > 0 ? normalizedMatchedResultsCount / totalEntries : 0,
+      hasResultCriteria: Array.isArray(payload?.resultCriteria) && payload.resultCriteria.length > 0,
+    };
+  }
+
+  function shouldShowResultColumns(payload) {
+    const coverage = getResultsCoverageInfo(payload);
+
+    if (!coverage.hasResultCriteria || coverage.totalEntries <= 0) {
+      return false;
+    }
+
+    return coverage.matchedResultsCount >= coverage.totalEntries * MIN_RESULTS_COVERAGE_RATIO;
+  }
+
+  function getResultsCoverageMessage(payload) {
+    const coverage = getResultsCoverageInfo(payload);
+
+    if (coverage.matchedResultsCount <= 0 || coverage.totalEntries <= 0) {
+      return "";
+    }
+
+    if (!shouldShowResultColumns(payload)) {
+      return ` results hidden because public ranks are only available for ${formatInteger(coverage.matchedResultsCount)} of ${formatInteger(coverage.totalEntries)} entries`;
+    }
+
+    if (coverage.matchedResultsCount >= coverage.totalEntries) {
+      return "";
+    }
+
+    return ` public results available for ${formatInteger(coverage.matchedResultsCount)} of ${formatInteger(coverage.totalEntries)} entries`;
+  }
+
   async function readJsonResponse(response) {
     const contentType = getContentType(response);
     const text = await response.text();
@@ -208,7 +253,7 @@
   }
 
   function getColumns() {
-    const resultColumns = Array.isArray(state.meta?.resultCriteria)
+    const resultColumns = shouldShowResultColumns(state.meta) && Array.isArray(state.meta?.resultCriteria)
       ? state.meta.resultCriteria.map((criterion) => ({
           key: criterion.key,
           label: `${String(criterion.name || "").toLowerCase()} rank`,
@@ -560,7 +605,7 @@
       state.platformFilters.clear();
       elements.searchInput.disabled = !state.rows.length;
       render();
-      setStatus(`loaded ${formatInteger(state.rows.length)} entries from ${getJamLabel(payload)}`, "success");
+      setStatus(`loaded ${formatInteger(state.rows.length)} entries from ${getJamLabel(payload)}${getResultsCoverageMessage(payload)}`, "success");
     } catch (error) {
       state.rows = [];
       state.meta = null;
