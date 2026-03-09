@@ -220,6 +220,23 @@
       overflow: hidden;
     }
 
+    .table-scroll-top {
+      display: none;
+      overflow-x: auto;
+      overflow-y: hidden;
+      height: 18px;
+      border-bottom: 1px solid var(--border);
+      background: #fcf7f2;
+    }
+
+    .table-scroll-top.active {
+      display: block;
+    }
+
+    .table-scroll-spacer {
+      height: 1px;
+    }
+
     .table-wrap {
       overflow: auto;
     }
@@ -395,8 +412,11 @@
     </section>
 
     <section class="panel table-panel">
-      <div class="table-wrap">
-        <table aria-describedby="summary">
+      <div id="table-scroll-top" class="table-scroll-top">
+        <div id="table-scroll-spacer" class="table-scroll-spacer" aria-hidden="true"></div>
+      </div>
+      <div id="table-wrap" class="table-wrap">
+        <table id="results-table" aria-describedby="summary">
           <thead id="table-head">
             <tr>
               <th><button class="sort" data-sort="gameName" type="button" title="canonical itch.io game title from jam_games[].game.title">game name <span class="sort-indicator" aria-hidden="true"></span></button></th>
@@ -418,6 +438,6 @@
     </section>
   </main>
 
-  <script defer src="./app.js?v=20260309-2"></script>
+  <script defer src="./app.js?v=20260309-4"></script>
 </body>
 </html>

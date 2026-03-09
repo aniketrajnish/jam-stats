@@ -450,7 +450,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
     jamId,
     jamSlug: inferredSlug,
     feedUrl,
-    hasResults: resultCriteria.length > 0,
+    hasResults: results.length > 0,
     resultCriteria,
     generatedOn: Number(entriesPayload?.generated_on) || null,
     rows,
@@ -460,7 +460,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) 
       ratesGiven: "following itch-analytics the coolness value exposed by entries.json is used as the available votes-given signal",
       coolness: "coolness comes directly from entries.json",
       karma: "karma is computed client-side as log(1 + coolness) - (log(1 + rating_count) / log(5))",
-      criteriaRanks: "when available criteria rank columns come from itch.io results.json using the same finished-jam results feed used by itch-analytics",
+      criteriaRanks: "when available result rank columns come directly from the criteria entries in itch.io results.json, including overall when the jam exposes it as a criterion",
     },
   };
 }

@@ -47,6 +47,7 @@
   ];
 
   const state = {
+    isLoading: false,
     rows: [],
     meta: null,
     sortKey: "popularity",
@@ -61,10 +62,16 @@
     status: document.getElementById("status"),
     searchInput: document.getElementById("search-input"),
     summary: document.getElementById("summary"),
+    tableScrollTop: document.getElementById("table-scroll-top"),
+    tableScrollSpacer: document.getElementById("table-scroll-spacer"),
+    tableWrap: document.getElementById("table-wrap"),
+    table: document.getElementById("results-table"),
     tableHead: document.getElementById("table-head"),
     tableBody: document.getElementById("table-body"),
   };
   const apiBase = getApiBase();
+  let tableScrollSyncFrame = 0;
+  let isSyncingTableScroll = false;
 
   function getApiBase() {
     const metaValue = document
@@ -204,7 +211,7 @@
     const resultColumns = Array.isArray(state.meta?.resultCriteria)
       ? state.meta.resultCriteria.map((criterion) => ({
           key: criterion.key,
-          label: `${criterion.name} rank`,
+          label: `${String(criterion.name || "").toLowerCase()} rank`,
           title: `rank for ${criterion.name} from itch.io results.json following the same finished-jam results feed used by itch-analytics`,
           kind: "rank",
           defaultSortDir: "desc",
@@ -433,6 +440,8 @@
           .join("")}
       </tr>
     `;
+
+    scheduleTableScrollSync();
   }
 
   function renderRows() {
@@ -447,8 +456,9 @@
       : "";
 
     if (!state.rows.length) {
-      elements.summary.textContent = "0 entries";
-      elements.tableBody.innerHTML = `<tr><td class="empty" colspan="${columnCount}">load a jam to populate the table</td></tr>`;
+      elements.summary.textContent = state.isLoading ? "loading..." : "0 entries";
+      elements.tableBody.innerHTML = `<tr><td class="empty" colspan="${columnCount}">${state.isLoading ? "loading jam entries..." : "load a jam to populate the table"}</td></tr>`;
+      scheduleTableScrollSync();
       return;
     }
 
@@ -456,12 +466,15 @@
 
     if (!visibleRows.length) {
       elements.tableBody.innerHTML = `<tr><td class="empty" colspan="${columnCount}">no entries match the current search or platform filters</td></tr>`;
+      scheduleTableScrollSync();
       return;
     }
 
     elements.tableBody.innerHTML = visibleRows
       .map((row) => `<tr>${columns.map((column) => renderCell(row, column)).join("")}</tr>`)
       .join("");
+
+    scheduleTableScrollSync();
   }
 
   function getSortIcon(direction) {
@@ -481,6 +494,43 @@
     renderRows();
   }
 
+  function syncTableScroll(source, target) {
+    if (isSyncingTableScroll || target.scrollLeft === source.scrollLeft) {
+      return;
+    }
+
+    isSyncingTableScroll = true;
+    target.scrollLeft = source.scrollLeft;
+    isSyncingTableScroll = false;
+  }
+
+  function updateTableScrollUi() {
+    const tableWidth = elements.table.scrollWidth;
+    const wrapWidth = elements.tableWrap.clientWidth;
+    const hasHorizontalOverflow = tableWidth > wrapWidth + 1;
+
+    elements.tableScrollSpacer.style.width = `${tableWidth}px`;
+    elements.tableScrollTop.classList.toggle("active", hasHorizontalOverflow);
+
+    if (!hasHorizontalOverflow) {
+      elements.tableScrollTop.scrollLeft = 0;
+      return;
+    }
+
+    elements.tableScrollTop.scrollLeft = elements.tableWrap.scrollLeft;
+  }
+
+  function scheduleTableScrollSync() {
+    if (tableScrollSyncFrame) {
+      return;
+    }
+
+    tableScrollSyncFrame = window.requestAnimationFrame(function () {
+      tableScrollSyncFrame = 0;
+      updateTableScrollUi();
+    });
+  }
+
   async function loadEntries() {
     const input = elements.jamInput.value.trim();
     if (!input) {
@@ -489,6 +539,12 @@
     }
 
     setBusy(true);
+    state.isLoading = true;
+    state.rows = [];
+    state.meta = null;
+    state.platformFilters.clear();
+    elements.searchInput.disabled = true;
+    render();
     setStatus("fetching entries...", "");
 
     try {
@@ -500,6 +556,7 @@
 
       state.rows = Array.isArray(payload.rows) ? payload.rows : [];
       state.meta = payload;
+      state.isLoading = false;
       state.platformFilters.clear();
       elements.searchInput.disabled = !state.rows.length;
       render();
@@ -507,6 +564,7 @@
     } catch (error) {
       state.rows = [];
       state.meta = null;
+      state.isLoading = false;
       state.platformFilters.clear();
       elements.searchInput.disabled = true;
       render();
@@ -532,6 +590,14 @@
   });
 
   elements.searchInput.addEventListener("input", renderRows);
+
+  elements.tableScrollTop.addEventListener("scroll", function () {
+    syncTableScroll(elements.tableScrollTop, elements.tableWrap);
+  });
+
+  elements.tableWrap.addEventListener("scroll", function () {
+    syncTableScroll(elements.tableWrap, elements.tableScrollTop);
+  });
 
   elements.tableBody.addEventListener("click", function (event) {
     const button = event.target.closest("button.platform-icon");
@@ -573,6 +639,14 @@
 
     render();
   });
+
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(scheduleTableScrollSync);
+    resizeObserver.observe(elements.tableWrap);
+    resizeObserver.observe(elements.table);
+  } else {
+    window.addEventListener("resize", scheduleTableScrollSync);
+  }
 
   render();
 })();
