@@ -12,6 +12,7 @@
   <meta name="jam-stats-api-base" content="">
   <style>
     :root {
+      color-scheme: light;
       --accent: #fa5c5c;
       --accent-dark: #e14b4b;
       --accent-soft: #ffe8e8;
@@ -19,10 +20,46 @@
       --fg: #222222;
       --muted: #6b6b6b;
       --panel: #ffffff;
+      --panel-soft: #f7f7f3;
       --border: #d9d9d4;
       --shadow: 0 1px 0 rgba(0, 0, 0, 0.05), 0 10px 24px rgba(0, 0, 0, 0.08);
       --danger: #c23c3c;
+      --topbar-bg: #ffffff;
+      --topbar-border: var(--accent);
+      --topbar-fg: var(--accent-dark);
+      --topbar-subtle: rgba(225, 75, 75, 0.8);
+      --button-border: rgba(0, 0, 0, 0.08);
+      --input-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
+      --logo-ring: rgba(0, 0, 0, 0.06);
+      --table-head: #f8e3e3;
+      --table-hover: #fff5f5;
       --maxw: 1180px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --accent: #ff7a7a;
+        --accent-dark: #ff9696;
+        --accent-soft: #3a2424;
+        --bg: #141211;
+        --fg: #f4ece7;
+        --muted: #b7aca4;
+        --panel: #211d1d;
+        --panel-soft: #2a2625;
+        --border: #4e4240;
+        --shadow: 0 1px 0 rgba(255, 255, 255, 0.02), 0 18px 40px rgba(0, 0, 0, 0.35);
+        --danger: #ff8e8e;
+        --topbar-bg: #1d1918;
+        --topbar-border: var(--accent);
+        --topbar-fg: #ff8e8e;
+        --topbar-subtle: rgba(255, 142, 142, 0.82);
+        --button-border: rgba(255, 255, 255, 0.14);
+        --input-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
+        --logo-ring: rgba(255, 255, 255, 0.1);
+        --table-head: #332424;
+        --table-hover: #2a2020;
+      }
     }
 
     * {
@@ -64,12 +101,12 @@
     }
 
     .topbar a[href] {
-      color: #ffffff;
+      color: var(--topbar-fg);
     }
 
     .topbar a[href]:hover,
     .topbar a[href]:focus-visible {
-      color: var(--accent-soft);
+      color: var(--accent);
     }
 
     button,
@@ -90,8 +127,9 @@
       margin: 0 0 24px;
       padding: 18px 20px;
       border-radius: 14px;
-      background: linear-gradient(180deg, var(--accent), var(--accent-dark));
-      color: #ffffff;
+      border: 2px solid var(--topbar-border);
+      background: var(--topbar-bg);
+      color: var(--topbar-fg);
       box-shadow: var(--shadow);
     }
 
@@ -105,9 +143,9 @@
       width: 58px;
       height: 58px;
       border-radius: 12px;
-      background: #ffffff;
+      background: var(--panel-soft);
       object-fit: cover;
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+      box-shadow: inset 0 0 0 1px var(--logo-ring);
     }
 
     .brand-copy h1 {
@@ -118,7 +156,7 @@
 
     .brand-copy p {
       margin: 4px 0 0;
-      color: rgba(255, 255, 255, 0.88);
+      color: var(--topbar-subtle);
     }
 
     @media (max-width: 720px) {
@@ -160,11 +198,11 @@
       border-radius: 12px;
       background: var(--panel);
       color: var(--fg);
-      box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
+      box-shadow: var(--input-shadow);
     }
 
     button {
-      border: 1px solid rgba(0, 0, 0, 0.08);
+      border: 1px solid var(--button-border);
       border-radius: 12px;
       padding: 12px 16px;
       background: var(--accent);
@@ -174,7 +212,7 @@
     }
 
     button.ghost {
-      background: #f7f7f3;
+      background: var(--panel-soft);
       color: var(--fg);
     }
 
@@ -239,14 +277,14 @@
     }
 
     thead tr {
-      background: #f8e3e3;
+      background: var(--table-head);
     }
 
     th {
       position: sticky;
       top: 0;
       z-index: 1;
-      background: #f8e3e3;
+      background: var(--table-head);
       backdrop-filter: blur(8px);
     }
 
@@ -287,7 +325,7 @@
     }
 
     tbody tr:hover {
-      background: #fff5f5;
+      background: var(--table-hover);
     }
 
     .game-link {
@@ -322,8 +360,8 @@
       padding: 0;
       border: 1px solid var(--border);
       border-radius: 999px;
-      background: #f7f7f3;
-      color: #555555;
+      background: var(--panel-soft);
+      color: var(--muted);
       box-shadow: none;
       transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
     }
