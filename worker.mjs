@@ -137,6 +137,22 @@ async function fetchJson(url) {
   return response.json();
 }
 
+async function fetchOptionalJson(url) {
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: FETCH_HEADERS,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
 function extractJamIdFromHtml(html) {
   const patterns = [
     /new I\.ViewJam\([^]*?"id":\s*(\d+)/,
@@ -226,10 +242,142 @@ function computeKarma(coolness, ratingCount) {
   return Math.log(1 + coolness) - Math.log(1 + ratingCount) / Math.log(5);
 }
 
-function normalizeEntries(entriesPayload, jamId, slug, feedUrl) {
+function normalizeSubmissionUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) {
+    return "";
+  }
+
+  const normalized = url.startsWith("http") ? url : `https://itch.io${url}`;
+  return normalized.replace(/\/+$/g, "");
+}
+
+function extractRateId(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return "";
+  }
+
+  if (/^\d+$/.test(rawValue)) {
+    return rawValue;
+  }
+
+  const normalizedUrl = normalizeSubmissionUrl(rawValue);
+  const match = normalizedUrl.match(/\/rate\/(\d+)(?:[/?#]|$)/);
+  return match ? match[1] : "";
+}
+
+function normalizeLookupTitle(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function slugifyCriteriaName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildResultCriteria(results) {
+  const criteria = [];
+  const seenNames = new Set();
+  const seenKeys = new Set();
+
+  for (const result of results) {
+    const resultCriteria = Array.isArray(result?.criteria) ? result.criteria : [];
+    for (const criterion of resultCriteria) {
+      const name = String(criterion?.name || "").trim();
+      const normalizedName = name.toLowerCase();
+      if (!name || seenNames.has(normalizedName)) {
+        continue;
+      }
+
+      seenNames.add(normalizedName);
+
+      const baseKey = slugifyCriteriaName(name) || "criteria";
+      let key = `criteriaRank_${baseKey}`;
+      let suffix = 2;
+      while (seenKeys.has(key)) {
+        key = `criteriaRank_${baseKey}_${suffix}`;
+        suffix += 1;
+      }
+
+      seenKeys.add(key);
+      criteria.push({ name, key });
+    }
+  }
+
+  return criteria;
+}
+
+function buildResultsLookup(results) {
+  const lookup = new Map();
+
+  for (const result of results) {
+    const submissionUrl = normalizeSubmissionUrl(result?.url);
+    if (submissionUrl && !lookup.has(`url:${submissionUrl}`)) {
+      lookup.set(`url:${submissionUrl}`, result);
+    }
+
+    const rateId = extractRateId(result?.id || result?.url);
+    if (rateId && !lookup.has(`rate:${rateId}`)) {
+      lookup.set(`rate:${rateId}`, result);
+    }
+
+    const title = normalizeLookupTitle(result?.title);
+    if (title && !lookup.has(`title:${title}`)) {
+      lookup.set(`title:${title}`, result);
+    }
+  }
+
+  return lookup;
+}
+
+function findResultForEntry(resultsLookup, submissionUrl, rateId, gameTitle) {
+  const normalizedSubmissionUrl = normalizeSubmissionUrl(submissionUrl);
+  if (normalizedSubmissionUrl && resultsLookup.has(`url:${normalizedSubmissionUrl}`)) {
+    return resultsLookup.get(`url:${normalizedSubmissionUrl}`) || null;
+  }
+
+  if (rateId && resultsLookup.has(`rate:${rateId}`)) {
+    return resultsLookup.get(`rate:${rateId}`) || null;
+  }
+
+  const normalizedTitle = normalizeLookupTitle(gameTitle);
+  if (normalizedTitle && resultsLookup.has(`title:${normalizedTitle}`)) {
+    return resultsLookup.get(`title:${normalizedTitle}`) || null;
+  }
+
+  return null;
+}
+
+function getCriteriaRank(result, criterionName) {
+  if (!result) {
+    return null;
+  }
+
+  const normalizedName = String(criterionName || "").trim().toLowerCase();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const criteria = Array.isArray(result?.criteria) ? result.criteria : [];
+  const match = criteria.find((criterion) => (
+    String(criterion?.name || "").trim().toLowerCase() === normalizedName
+  ));
+
+  const rank = Number(match?.rank);
+  return Number.isFinite(rank) ? rank : null;
+}
+
+function normalizeEntries(entriesPayload, jamId, slug, feedUrl, resultsPayload) {
   const jamGames = Array.isArray(entriesPayload?.jam_games) ? entriesPayload.jam_games : [];
   const inferredSlug = inferSlug(slug, jamGames);
   const totalEntries = jamGames.length;
+  const results = Array.isArray(resultsPayload?.results) ? resultsPayload.results : [];
+  const resultCriteria = buildResultCriteria(results);
+  const resultsLookup = buildResultsLookup(results);
 
   const rows = jamGames.map((entry, index) => {
     const game = entry?.game || {};
@@ -257,10 +405,12 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl) {
     const submissionUrl = typeof entry?.url === "string" && entry.url
       ? `https://itch.io${entry.url}`
       : "";
+    const rateId = extractRateId(submissionUrl) || extractRateId(game?.id);
     const projectUrl = String(game?.url || "").trim();
     const karma = computeKarma(coolness, ratingCount);
+    const matchedResult = findResultForEntry(resultsLookup, submissionUrl, rateId, gameTitle);
 
-    return {
+    const row = {
       submissionId: Number(entry?.id) || null,
       projectId: Number(game?.id) || null,
       gameName: gameTitle,
@@ -288,12 +438,20 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl) {
         : null,
       searchableText: `${gameTitle} ${contributors.map((contributor) => contributor.name).join(" ")}`.toLowerCase(),
     };
+
+    resultCriteria.forEach((criterion) => {
+      row[criterion.key] = getCriteriaRank(matchedResult, criterion.name);
+    });
+
+    return row;
   });
 
   return {
     jamId,
     jamSlug: inferredSlug,
     feedUrl,
+    hasResults: resultCriteria.length > 0,
+    resultCriteria,
     generatedOn: Number(entriesPayload?.generated_on) || null,
     rows,
     notes: {
@@ -302,6 +460,7 @@ function normalizeEntries(entriesPayload, jamId, slug, feedUrl) {
       ratesGiven: "following itch-analytics the coolness value exposed by entries.json is used as the available votes-given signal",
       coolness: "coolness comes directly from entries.json",
       karma: "karma is computed client-side as log(1 + coolness) - (log(1 + rating_count) / log(5))",
+      criteriaRanks: "when available criteria rank columns come from itch.io results.json using the same finished-jam results feed used by itch-analytics",
     },
   };
 }
@@ -326,7 +485,8 @@ async function handleEntriesRequest(url) {
 
     const feedUrl = resolved.feedUrl;
     const entriesPayload = await fetchJson(feedUrl);
-    const normalized = normalizeEntries(entriesPayload, jamId, parsedInput.slug, feedUrl);
+    const resultsPayload = await fetchOptionalJson(feedUrl.replace(/entries\.json(?:\?.*)?$/i, "results.json"));
+    const normalized = normalizeEntries(entriesPayload, jamId, parsedInput.slug, feedUrl, resultsPayload);
 
     return jsonResponse({
       input: parsedInput.original,

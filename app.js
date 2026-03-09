@@ -1,4 +1,56 @@
 (function () {
+  const BASE_COLUMNS = [
+    {
+      key: "gameName",
+      label: "game name",
+      title: "canonical itch.io game title from jam_games[].game.title",
+      kind: "text",
+      defaultSortDir: "asc",
+    },
+    {
+      key: "contributors",
+      label: "contributors",
+      title: "uses jam_games[].contributors when present otherwise falls back to the primary uploader",
+      kind: "text",
+      defaultSortDir: "asc",
+    },
+    {
+      key: "popularity",
+      label: "popularity",
+      title: "uses itch.io native jam_games order from entries.json where 1 is most popular",
+      kind: "rank",
+      defaultSortDir: "desc",
+    },
+    {
+      key: "totalRating",
+      label: "total rating",
+      title: "raw rating_count from entries.json",
+      kind: "number",
+      defaultSortDir: "desc",
+    },
+    {
+      key: "coolness",
+      label: "coolness",
+      title: "raw coolness from entries.json calculated by itch as max votes_given minus disqualified_votes across contributors",
+      kind: "number",
+      defaultSortDir: "desc",
+    },
+    {
+      key: "karma",
+      label: "karma",
+      title: "calculated as log 1 plus coolness minus log 1 plus rating_count divided by log 5",
+      kind: "number",
+      defaultSortDir: "desc",
+    },
+    {
+      key: "platforms",
+      label: "platforms",
+      title: "from jam_games[].game.platforms in entries.json",
+      kind: "text",
+      defaultSortDir: "asc",
+    },
+  ];
+
   const state = {
     rows: [],
     meta: null,
@@ -7,13 +59,6 @@
     platformFilters: new Set(),
   };
 
-  const numericKeys = new Set([
-    "popularity",
-    "totalRating",
-    "coolness",
-    "karma",
-  ]);
-
   const elements = {
     jamInput: document.getElementById("jam-input"),
     loadButton: document.getElementById("load-button"),
@@ -21,8 +66,8 @@
     status: document.getElementById("status"),
     searchInput: document.getElementById("search-input"),
     summary: document.getElementById("summary"),
+    tableHead: document.getElementById("table-head"),
     tableBody: document.getElementById("table-body"),
-    sortButtons: Array.from(document.querySelectorAll("button.sort")),
   };
   const apiBase = getApiBase();
 
@@ -160,6 +205,50 @@
     return key || "other";
   }
 
+  function getColumns() {
+    const resultColumns = Array.isArray(state.meta?.resultCriteria)
+      ? state.meta.resultCriteria.map((criterion) => ({
+          key: criterion.key,
+          label: `${criterion.name} rank`,
+          title: `rank for ${criterion.name} from itch.io results.json following the same finished-jam results feed used by itch-analytics`,
+          kind: "rank",
+          defaultSortDir: "desc",
+        }))
+      : [];
+
+    return [
+      BASE_COLUMNS[0],
+      BASE_COLUMNS[1],
+      BASE_COLUMNS[2],
+      ...resultColumns,
+      BASE_COLUMNS[3],
+      BASE_COLUMNS[4],
+      BASE_COLUMNS[5],
+      BASE_COLUMNS[6],
+    ];
+  }
+
+  function getColumn(key) {
+    return getColumns().find((column) => column.key === key) || null;
+  }
+
+  function getDefaultSortDir(key) {
+    return getColumn(key)?.defaultSortDir || "asc";
+  }
+
+  function isRankColumn(key) {
+    return getColumn(key)?.kind === "rank";
+  }
+
+  function ensureValidSortKey() {
+    if (getColumn(state.sortKey)) {
+      return;
+    }
+
+    state.sortKey = "popularity";
+    state.sortDir = getDefaultSortDir("popularity");
+  }
+
   function getSortValue(row, key) {
     if (key === "contributors") {
       return row.contributorsText;
@@ -177,12 +266,22 @@
     const rightValue = getSortValue(right, state.sortKey);
     const direction = state.sortDir === "asc" ? 1 : -1;
 
-    if (state.sortKey === "popularity") {
-      const leftRank = Number(left.popularityRank || leftValue);
-      const rightRank = Number(right.popularityRank || rightValue);
+    if (isRankColumn(state.sortKey)) {
+      const leftRank = Number(leftValue);
+      const rightRank = Number(rightValue);
+
+      if (!Number.isFinite(leftRank)) {
+        return Number.isFinite(rightRank) ? 1 : 0;
+      }
+
+      if (!Number.isFinite(rightRank)) {
+        return -1;
+      }
+
       if (state.sortDir === "desc") {
         return leftRank - rightRank;
       }
+
       return rightRank - leftRank;
     }
 
@@ -278,8 +377,73 @@
     return '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><path d="M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13Zm0 1.5a5 5 0 1 0 0 10A5 5 0 0 0 8 3Z"></path></svg>';
   }
 
+  function renderCell(row, column) {
+    if (column.key === "gameName") {
+      const projectHref = row.projectUrl ? ` href="${escapeHtml(row.projectUrl)}"` : "";
+      const projectTarget = row.projectUrl ? ' target="_blank" rel="noreferrer"' : "";
+
+      return `
+        <td>
+          <a class="game-link"${projectHref}${projectTarget}>${escapeHtml(row.gameName)}</a>
+        </td>
+      `;
+    }
+
+    if (column.key === "contributors") {
+      return `<td><div class="contrib-list">${renderContributors(row)}</div></td>`;
+    }
+
+    if (column.key === "popularity") {
+      return `<td>${formatPopularity(row.popularity)}</td>`;
+    }
+
+    if (column.key === "totalRating") {
+      return `<td>${formatInteger(row.totalRating)}</td>`;
+    }
+
+    if (column.key === "coolness") {
+      return `<td>${formatInteger(row.coolness)}</td>`;
+    }
+
+    if (column.key === "karma") {
+      return `<td>${formatKarma(row.karma)}</td>`;
+    }
+
+    if (column.key === "platforms") {
+      return `<td><div class="platforms">${renderPlatforms(row)}</div></td>`;
+    }
+
+    return `<td>${formatPopularity(row[column.key])}</td>`;
+  }
+
+  function renderTableHead() {
+    ensureValidSortKey();
+
+    elements.tableHead.innerHTML = `
+      <tr>
+        ${getColumns()
+          .map((column) => {
+            const isActive = column.key === state.sortKey;
+            return `
+              <th>
+                <button class="sort${isActive ? " active" : ""}" data-sort="${escapeHtml(column.key)}" type="button" title="${escapeHtml(column.title)}">
+                  ${escapeHtml(column.label)}
+                  <span class="sort-indicator" aria-hidden="true">${getSortIcon(isActive ? state.sortDir : "idle")}</span>
+                </button>
+              </th>
+            `;
+          })
+          .join("")}
+      </tr>
+    `;
+  }
+
   function renderRows() {
+    ensureValidSortKey();
+
     const visibleRows = getVisibleRows();
+    const columns = getColumns();
+    const columnCount = columns.length;
     const activePlatformLabels = Array.from(state.platformFilters).sort();
     const filterSuffix = activePlatformLabels.length
       ? ` filtered by ${activePlatformLabels.join(", ")}`
@@ -287,46 +451,20 @@
 
     if (!state.rows.length) {
       elements.summary.textContent = "0 entries";
-      elements.tableBody.innerHTML = '<tr><td class="empty" colspan="7">load a jam to populate the table</td></tr>';
+      elements.tableBody.innerHTML = `<tr><td class="empty" colspan="${columnCount}">load a jam to populate the table</td></tr>`;
       return;
     }
 
     elements.summary.textContent = `${formatInteger(visibleRows.length)} of ${formatInteger(state.rows.length)} entries${filterSuffix}`;
 
     if (!visibleRows.length) {
-      elements.tableBody.innerHTML = '<tr><td class="empty" colspan="7">no entries match the current search or platform filters</td></tr>';
+      elements.tableBody.innerHTML = `<tr><td class="empty" colspan="${columnCount}">no entries match the current search or platform filters</td></tr>`;
       return;
     }
 
     elements.tableBody.innerHTML = visibleRows
-      .map((row) => {
-        const projectHref = row.projectUrl ? ` href="${escapeHtml(row.projectUrl)}"` : "";
-        const projectTarget = row.projectUrl ? ' target="_blank" rel="noreferrer"' : "";
-
-        return `
-          <tr>
-            <td>
-              <a class="game-link"${projectHref}${projectTarget}>${escapeHtml(row.gameName)}</a>
-            </td>
-            <td><div class="contrib-list">${renderContributors(row)}</div></td>
-            <td>${formatPopularity(row.popularity)}</td>
-            <td>${formatInteger(row.totalRating)}</td>
-            <td>${formatInteger(row.coolness)}</td>
-            <td>${formatKarma(row.karma)}</td>
-            <td><div class="platforms">${renderPlatforms(row)}</div></td>
-          </tr>
-        `;
-      })
+      .map((row) => `<tr>${columns.map((column) => renderCell(row, column)).join("")}</tr>`)
       .join("");
-  }
-
-  function updateSortButtons() {
-    elements.sortButtons.forEach((button) => {
-      const indicator = button.querySelector(".sort-indicator");
-      const isActive = button.dataset.sort === state.sortKey;
-      button.classList.toggle("active", isActive);
-      indicator.innerHTML = getSortIcon(isActive ? state.sortDir : "idle");
-    });
   }
 
   function getSortIcon(direction) {
@@ -342,7 +480,7 @@
   }
 
   function render() {
-    updateSortButtons();
+    renderTableHead();
     renderRows();
   }
 
@@ -418,22 +556,25 @@
     renderRows();
   });
 
-  elements.sortButtons.forEach((button) => {
-    button.addEventListener("click", function () {
-      const key = button.dataset.sort;
-      if (!key) {
-        return;
-      }
+  elements.tableHead.addEventListener("click", function (event) {
+    const button = event.target.closest("button.sort");
+    if (!button) {
+      return;
+    }
 
-      if (state.sortKey === key) {
-        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-      } else {
-        state.sortKey = key;
-        state.sortDir = numericKeys.has(key) ? "desc" : "asc";
-      }
+    const key = button.dataset.sort;
+    if (!key) {
+      return;
+    }
 
-      render();
-    });
+    if (state.sortKey === key) {
+      state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      state.sortKey = key;
+      state.sortDir = getDefaultSortDir(key);
+    }
+
+    render();
   });
 
   render();

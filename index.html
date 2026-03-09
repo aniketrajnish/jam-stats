@@ -30,7 +30,6 @@
       --topbar-subtle: rgba(225, 75, 75, 0.8);
       --button-border: rgba(0, 0, 0, 0.08);
       --input-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
-      --logo-ring: rgba(0, 0, 0, 0.06);
       --table-head: #f8e3e3;
       --table-hover: #fff5f5;
       --maxw: 1180px;
@@ -56,7 +55,6 @@
         --topbar-subtle: rgba(255, 142, 142, 0.82);
         --button-border: rgba(255, 255, 255, 0.14);
         --input-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
-        --logo-ring: rgba(255, 255, 255, 0.1);
         --table-head: #332424;
         --table-hover: #2a2020;
       }
@@ -261,8 +259,8 @@
     }
 
     table {
-      width: 100%;
-      min-width: 1040px;
+      width: max-content;
+      min-width: 100%;
       border-collapse: collapse;
     }
 
@@ -433,7 +431,7 @@
     <section class="panel table-panel">
       <div class="table-wrap">
         <table aria-describedby="summary">
-          <thead>
+          <thead id="table-head">
             <tr>
               <th><button class="sort" data-sort="gameName" type="button" title="canonical itch.io game title from jam_games[].game.title">game name <span class="sort-indicator" aria-hidden="true"></span></button></th>
               <th><button class="sort" data-sort="contributors" type="button" title="uses jam_games[].contributors when present otherwise falls back to the primary uploader">contributors <span class="sort-indicator" aria-hidden="true"></span></button></th>
@@ -454,6 +452,6 @@
     </section>
   </main>
 
-  <script defer src="./app.js?v=20260309-1"></script>
+  <script defer src="./app.js?v=20260309-2"></script>
 </body>
 </html>
